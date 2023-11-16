@@ -357,7 +357,7 @@ set_target_properties(dobby_static
   COMPILE_FLAGS "${compiler_flags}"
   )
 
-# 修复编译失败
+# Fix compilation failure
 message(STATUS "[Dobby] compile_definitions: ${compile_definitions}")
 add_compile_definitions(__DOBBY_BUILD_VERSION__="${DOBBY_BUILD_VERSION}")
 target_compile_definitions(dobby PRIVATE
