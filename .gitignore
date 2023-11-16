@@ -78,3 +78,6 @@ xcuserdata/
 /prefab/**/*.a
 /prefab/**/*.h
 /AndroidManifest.xml
+
+# build
+build_for_ios_arm64

@@ -310,7 +310,7 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
 endif ()
 set(DOBBY_BUILD_VERSION "Dobby${VERSION_REVISION}")
 set(compile_definitions "${compile_definitions} -D__DOBBY_BUILD_VERSION__=\"${DOBBY_BUILD_VERSION}\"")
-message(STATUS "[Dobby] ${DOBBY_BUILD_VERSION}")
+message(STATUS "[Dobby] DOBBY_BUILD_VERSION: ${DOBBY_BUILD_VERSION}")
 
 # ---
 
@@ -357,6 +357,9 @@ set_target_properties(dobby_static
   COMPILE_FLAGS "${compiler_flags}"
   )
 
+# 修复编译失败
+message(STATUS "[Dobby] compile_definitions: ${compile_definitions}")
+add_compile_definitions(__DOBBY_BUILD_VERSION__="${DOBBY_BUILD_VERSION}")
 target_compile_definitions(dobby PRIVATE
   "COMPILE_DEFINITIONS ${compile_definitions}"
   )
