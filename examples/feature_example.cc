@@ -8,130 +8,118 @@
 
 #include <iostream>
 
+const char* ret_string = "ret_value";
 
-#define kMyTest 0
+#define kLogMethod(methodName) printf("--->\n%s called. address: %p\n", __func__, &methodName);
+#define kLogParameter2(arg0, arg1) printf("arg0: %d, arg1: %s\n<---\n", arg0, arg1);
 
-#if kMyTest == 0
-static void (*orig_test)();
+#define kHookLogMethod(address) printf("%s called. address: %p\n", __func__, address);
+#define kHookParameter2(ctx) printf("arg0: %d, arg1: %s\n", (int) ctx->general.regs.x0, (char *) ctx->general.regs.x1);
 
-static void test() {
-    printf("test\n");
+
+// MARK: - DobbyHook Demo
+
+static void (*orig_dobbyHookTest)(int arg0, const char* arg1);
+
+static void dobbyHookTest(int arg0, const char* arg1) {
+    kLogMethod(dobbyHookTest)
+    kLogParameter2(arg0, arg1)
 }
 
-static void replaced_test() {
-    printf("replace_test\n");
+static void replaced_dobbyHookTest(int arg0, const char* arg1) {
+    kLogMethod(dobbyHookTest)
+    kLogParameter2(arg0, arg1)
 }
 
-__attribute__((constructor)) static void ctor_test() {
-    Logger::Shared()->setLogLevel(LOG_LEVEL_INFO);
-
-    test();
-    DobbyHook((void *)&test, (void *)&replaced_test, (void **)&orig_test);
-    test();
-    orig_test();
+static void DobbyHook_test() {
+    printf("\n\n--- DobbyHook Demo ---\n");
+    dobbyHookTest(111, ret_string);
+    // 
+    DobbyHook((void *)&dobbyHookTest, (void *)&replaced_dobbyHookTest, (void **)&orig_dobbyHookTest);
+    dobbyHookTest(222, ret_string);
+    //
+    DobbyDestroy((void *)&dobbyHookTest);
+    dobbyHookTest(333, ret_string);
 }
 
-#elif kMyTest == 1
-uintptr_t getCallFirstArg(RegisterContext *ctx) {
-    uintptr_t result;
-    result = ctx->general.regs.x0;
-    return result;
+// MARK: - DobbyInstrument Demo
+
+static void* dobbyInstrumentTest(int arg0, const char* arg1) {
+    kLogMethod(dobbyInstrumentTest)
+    kLogParameter2(arg0, arg1)
+    return (void *) arg1;
 }
 
-void format_integer_manually(char *buf, uint64_t integer) {
-    uint64_t tmp = 0;
-    for (tmp = integer; tmp > 0; tmp = (tmp >> 4)) {
-        buf[0] += (tmp % 16);
-        buf--;
-    }
+void dobbyInstrumentTest_handler(void *address, DobbyRegisterContext *ctx) {
+    kHookLogMethod(address)
+    kHookParameter2(ctx)
 }
 
-static void* dbiTest(size_t size) {
-    printf("test size: 0x%zx\n", size);
-    return NULL;
+static void DobbyInstrument_test() {
+    printf("\n\n--- DobbySymbolResolver Demo ---\n");
+    dobbyInstrumentTest(111, ret_string);
+    //
+    DobbyInstrument((void *)dobbyInstrumentTest, dobbyInstrumentTest_handler);
+    dobbyInstrumentTest(222, ret_string);
+    //
+    DobbyDestroy((void *)dobbyInstrumentTest);
+    dobbyInstrumentTest(333, ret_string);
 }
 
-// [ATTENTION]:
-// printf will call 'malloc' internally, and will crash in a loop.
-// so, use 'puts' is a better choice.
-void malloc_handler(RegisterContext *ctx, const HookEntryInfo *info) {
-    size_t size_ = 0;
-    size_        = getCallFirstArg(ctx);
-    char buffer[] = "[-] function malloc first arg: 0x00000000.";
-    format_integer_manually(strchr(buffer, '.') - 1, size_);
-    puts(buffer);
-//    info->target_address();
-}
+// MARK: - DobbySymbolResolver Demo
 
-__attribute__((constructor)) static void ctor_test() {
-    log_set_level(-1);
-    
-//#define kDBIFunc malloc // malloc 本身的分析有点麻烦
-#define kDBIFunc dbiTest
-    
-    void *tmp = NULL;
-    {
-        tmp = kDBIFunc(0x11111111);
-        if(tmp) free(tmp);
-    }
-    DobbyInstrument((void *)kDBIFunc, malloc_handler);
-    {
-        tmp = kDBIFunc(0x22222222);
-        if(tmp) free(tmp);
-    }
-#undef kDBIFunc
-}
-
-#elif kMyTest == 2
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
+// 加上 extern "C" 和 去掉 static 才能被 DobbySymbolResolver 直接找到.
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-static void* symbolTest(size_t size);
+static void* dobbySymbolResolverTest(int arg0, const char* arg1);
 
 #ifdef __cplusplus
 }
 #endif
 
-static void* symbolTest(size_t size) {
-    printf("symbol size: 0x%zx\n", size);
-    return NULL;
+static void* dobbySymbolResolverTest(int arg0, const char* arg1) {
+    kLogMethod(dobbySymbolResolverTest)
+    kLogParameter2(arg0, arg1);
+    return (void *) arg1;
 }
 
-void symbol_handler(void *address, DobbyRegisterContext *ctx) {
-    printf("%s address: %p\n", __func__, address);
+void dobbySymbolResolverTest_handler(void *address, DobbyRegisterContext *ctx) {
+    kHookLogMethod(address);
+    kHookParameter2(ctx);
 }
 
-__attribute__((constructor)) static void ctor_test() {
-    Logger::Shared()->setLogLevel(LOG_LEVEL_INFO);
-    
-    // hook
-    void *func = DobbySymbolResolver(NULL, "open");
-    DobbyInstrument(func, symbol_handler);
-    
-    func = DobbySymbolResolver(NULL, "symbolTest"); // 加上 extern "C" 和 去掉 static 才能找到.
+static void DobbySymbolResolver_test() {
+    printf("\n\n--- DobbySymbolResolver Demo ---\n");
+    dobbySymbolResolverTest(111, ret_string);
+    //
+    void *func = DobbySymbolResolver(NULL, "dobbySymbolResolverTest_handler");
     if (func == NULL) {
-        func = DobbySymbolResolver(NULL, "__ZL10symbolTestm");
+        func = DobbySymbolResolver(NULL, "__ZL23dobbySymbolResolverTestiPKc");
     }
-    DobbyInstrument(func, symbol_handler);
-    // test
-    int fd = open("not found", O_RDONLY);
-    if (fd != -1) {
-        close(fd);
-    }
-    symbolTest(0x1111);
+    DobbyInstrument(func, dobbySymbolResolverTest_handler);
+    dobbySymbolResolverTest(222, ret_string);
+    //
+    DobbyDestroy(func);
+    dobbySymbolResolverTest(333, ret_string);
 }
-#endif
 
+// MARK: - Main
+
+__attribute__((constructor)) static void ctor() {
+    std::cout << "Testing..." << std::endl;
+}
 
 int main(int argc, char const *argv[]) {
-
-  std::cout << "Start..." << std::endl;
-
-//  sleep(100);
-  return 0;
+    Logger::Shared()->setLogLevel(LOG_LEVEL_INFO);
+    
+    DobbyHook_test();
+    DobbyInstrument_test();
+    DobbySymbolResolver_test();
+    
+    std::cout << "\n\nStarting..." << std::endl;
+    
+    sleep(100);
+    return 0;
 }
