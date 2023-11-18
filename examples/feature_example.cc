@@ -105,6 +105,20 @@ static void DobbySymbolResolver_test() {
     dobbySymbolResolverTest(333, ret_string);
 }
 
+// MARK: - BUG
+
+void  *(*orig_memcpy)(void *__dst, const void *__src, size_t __n);
+static void  *replaced_memcpy(void *__dst, const void *__src, size_t __n)
+{
+    void *r = orig_memcpy(__dst, __src, __n); // r = dst
+    return r;
+}
+
+static void bug() {
+    DobbyHook((void  *)memcpy,  (void  *)replaced_memcpy,  (void  **)&orig_memcpy); // crash
+    __unused void *r = malloc(100);
+}
+
 // MARK: - Main
 
 __attribute__((constructor)) static void ctor() {
@@ -112,11 +126,13 @@ __attribute__((constructor)) static void ctor() {
 }
 
 int main(int argc, char const *argv[]) {
-    Logger::Shared()->setLogLevel(LOG_LEVEL_INFO);
-    
+    Logger::Shared()->setLogLevel(LOG_LEVEL_DEBUG);
+
     DobbyHook_test();
     DobbyInstrument_test();
     DobbySymbolResolver_test();
+    
+    bug();
     
     std::cout << "\n\nStarting..." << std::endl;
     
